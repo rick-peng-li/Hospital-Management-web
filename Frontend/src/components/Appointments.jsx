@@ -4,14 +4,20 @@ import Login from "./Login";
 import {
   FaCalendarPlus,
   FaSearch,
-  FaEdit,
   FaTrash,
   FaCheckCircle,
 } from "react-icons/fa";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { useLocation } from "react-router-dom";
+import axios from "axios";
 import LoginContext from "../context/LoginContext";
+
+const authHeader = () => ({
+  headers: {
+    Authorization: `Bearer ${localStorage.getItem("healthnest_token")}`,
+  },
+});
 
 const Appointments = () => {
   const { isLoggedIn } = useContext(LoginContext);
@@ -19,6 +25,7 @@ const Appointments = () => {
   const [doctors, setDoctors] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [error, setError] = useState("");
   const [newAppointment, setNewAppointment] = useState({
     patientName: "",
     doctorId: "",
@@ -30,37 +37,35 @@ const Appointments = () => {
   const queryParams = new URLSearchParams(location.search);
   const selectedDoctorId = queryParams.get("doctorId");
 
+  const loadDoctors = async () => {
+    try {
+      const response = await axios.get("/api/doctors");
+      setDoctors(response.data.data || []);
+    } catch (err) {
+      console.error("Error fetching doctors:", err);
+    }
+  };
+
+  const loadAppointments = async () => {
+    try {
+      const response = await axios.get("/api/appointments");
+      setAppointments(response.data.data || []);
+    } catch (err) {
+      console.error("Error fetching appointments:", err);
+    }
+  };
+
   useEffect(() => {
-    setDoctors([
-      { id: 1, name: "Dr. Smith", specialty: "Cardiology" },
-      { id: 2, name: "Dr. Johnson", specialty: "Pediatrics" },
-      { id: 3, name: "Dr. Williams", specialty: "Orthopedics" },
-    ]);
+    loadDoctors();
+    loadAppointments();
+  }, []);
 
-    setAppointments([
-      {
-        id: 1,
-        patientName: "John Doe",
-        doctorId: 1,
-        appointmentDate: new Date(),
-        notes: "Regular checkup",
-        status: "Scheduled",
-      },
-      {
-        id: 2,
-        patientName: "Jane Smith",
-        doctorId: 2,
-        appointmentDate: new Date(Date.now() + 86400000),
-        notes: "Follow-up",
-        status: "Scheduled",
-      },
-    ]);
-
-    if (selectedDoctorId) {
+  useEffect(() => {
+    if (selectedDoctorId && doctors.length > 0) {
       setNewAppointment((prev) => ({ ...prev, doctorId: selectedDoctorId }));
       setShowForm(true);
     }
-  }, [selectedDoctorId]);
+  }, [selectedDoctorId, doctors]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -71,67 +76,74 @@ const Appointments = () => {
     setNewAppointment((prev) => ({ ...prev, appointmentDate: date }));
   };
 
-  const validateName = (name) => {
-    const namePattern = /^[A-Za-z][A-Za-z\s]{3,}$/;
-    return namePattern.test(name);
-  };
+  const validateName = (name) => /^[A-Za-z][A-Za-z\s]{3,}$/.test(name);
 
-  const validateDate = (date) => {
-    return date > new Date();
-  };
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+
     if (!validateName(newAppointment.patientName)) {
-      alert(
+      setError(
         "Patient name must start with a letter and be at least 4 characters long."
       );
       return;
     }
-    if (!validateDate(newAppointment.appointmentDate)) {
-      alert("Appointment date must be in the future.");
+    if (!(newAppointment.appointmentDate > new Date())) {
+      setError("Appointment date must be in the future.");
       return;
     }
-    const appointment = {
-      id: appointments.length + 1,
-      ...newAppointment,
-      status: "Scheduled",
-    };
-    setAppointments([...appointments, appointment]);
-    setNewAppointment({
-      patientName: "",
-      doctorId: "",
-      appointmentDate: new Date(),
-      notes: "",
-    });
-    setShowForm(false);
+
+    try {
+      await axios.post(
+        "/api/appointments",
+        {
+          patientName: newAppointment.patientName,
+          doctorId: newAppointment.doctorId,
+          appointmentDate: newAppointment.appointmentDate,
+          notes: newAppointment.notes,
+        },
+        authHeader()
+      );
+
+      await loadAppointments();
+      setNewAppointment({
+        patientName: "",
+        doctorId: "",
+        appointmentDate: new Date(),
+        notes: "",
+      });
+      setShowForm(false);
+    } catch (err) {
+      setError(err.response?.data?.message || "Unable to schedule appointment.");
+    }
   };
 
-  const deleteAppointment = (id) => {
-    setAppointments(
-      appointments.filter((appointment) => appointment.id !== id)
-    );
+  const deleteAppointment = async (id) => {
+    try {
+      await axios.delete(`/api/appointments/${id}`, authHeader());
+      await loadAppointments();
+    } catch (err) {
+      console.error("Error deleting appointment:", err);
+    }
   };
 
-  const completeAppointment = (id) => {
-    setAppointments(
-      appointments.map((appointment) =>
-        appointment.id === id
-          ? { ...appointment, status: "Completed" }
-          : appointment
-      )
-    );
+  const completeAppointment = async (id) => {
+    try {
+      await axios.patch(
+        `/api/appointments/${id}/status`,
+        { status: "Completed" },
+        authHeader()
+      );
+      await loadAppointments();
+    } catch (err) {
+      console.error("Error updating appointment:", err);
+    }
   };
 
   const filteredAppointments = appointments.filter(
     (appointment) =>
-      appointment.patientName
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      doctors
-        .find((d) => d.id === appointment.doctorId)
-        ?.name.toLowerCase()
-        .includes(searchTerm.toLowerCase())
+      appointment.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      appointment.doctor?.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -190,7 +202,7 @@ const Appointments = () => {
                 >
                   <option value="">Select Doctor</option>
                   {doctors.map((doctor) => (
-                    <option key={doctor.id} value={doctor.id}>
+                    <option key={doctor._id} value={doctor._id}>
                       {doctor.name} - {doctor.specialty}
                     </option>
                   ))}
@@ -210,6 +222,9 @@ const Appointments = () => {
                   onChange={handleInputChange}
                 />
               </div>
+
+              {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
               <button
                 type="submit"
                 className="mt-4 bg-accent text-primary px-6 py-2 rounded-full font-bold"
@@ -222,7 +237,7 @@ const Appointments = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredAppointments.map((appointment) => (
               <motion.div
-                key={appointment.id}
+                key={appointment._id}
                 className="bg-white p-6 rounded-lg shadow-lg"
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -232,11 +247,13 @@ const Appointments = () => {
                   {appointment.patientName}
                 </h3>
                 <p className="text-gray-600 mb-2">
-                  Doctor:{" "}
-                  {doctors.find((d) => d.id === appointment.doctorId)?.name}
+                  Doctor: {appointment.doctor?.name}
                 </p>
                 <p className="text-gray-600 mb-2">
-                  Date: {appointment.appointmentDate.toLocaleString()}
+                  Specialty: {appointment.doctor?.specialty}
+                </p>
+                <p className="text-gray-600 mb-2">
+                  Date: {new Date(appointment.appointmentDate).toLocaleString()}
                 </p>
                 <p className="text-gray-600 mb-4">Notes: {appointment.notes}</p>
                 <div className="flex justify-between items-center">
@@ -250,12 +267,9 @@ const Appointments = () => {
                     {appointment.status}
                   </span>
                   <div>
-                    <button className="text-blue-500 mr-2" title="Edit">
-                      <FaEdit />
-                    </button>
                     <button
                       className="text-red-500 mr-2"
-                      onClick={() => deleteAppointment(appointment.id)}
+                      onClick={() => deleteAppointment(appointment._id)}
                       title="Delete"
                     >
                       <FaTrash />
@@ -263,7 +277,7 @@ const Appointments = () => {
                     {appointment.status !== "Completed" && (
                       <button
                         className="text-green-500"
-                        onClick={() => completeAppointment(appointment.id)}
+                        onClick={() => completeAppointment(appointment._id)}
                         title="Mark as Completed"
                       >
                         <FaCheckCircle />
@@ -274,6 +288,10 @@ const Appointments = () => {
               </motion.div>
             ))}
           </div>
+
+          {filteredAppointments.length === 0 && (
+            <p className="text-center text-gray-500">No appointments found.</p>
+          )}
         </div>
       ) : (
         <Login />

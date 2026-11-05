@@ -1,33 +1,45 @@
 import React, { useState, useContext } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-
+import axios from "axios";
 import { FaEnvelope, FaLock, FaSignInAlt } from "react-icons/fa";
 import LoginContext from "../context/LoginContext";
 
 const Login = () => {
   const { setIsLoggedIn } = useContext(LoginContext);
+  const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Here you would typically send the form data to your backend for authentication
-    console.log("Login attempt:", formData);
-    // Reset form after submission
-    setFormData({
-      email: "",
-      password: "",
-    });
-    setIsLoggedIn(true);
-    // You might want to redirect the user or show a success message here
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await axios.post("/api/patients/login", formData);
+      localStorage.setItem("healthnest_token", response.data.token);
+      localStorage.setItem(
+        "healthnest_patient",
+        JSON.stringify(response.data.patient)
+      );
+      setIsLoggedIn(true);
+      setFormData({ email: "", password: "" });
+      navigate("/appointments");
+    } catch (err) {
+      setError(err.response?.data?.message || "Login failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -84,15 +96,24 @@ const Login = () => {
               />
             </div>
           </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
           <button
             type="submit"
-            className="w-full bg-accent text-primary font-bold py-2 px-4 rounded-md hover:bg-primary hover:text-accent transition duration-300 flex items-center justify-center"
+            disabled={loading}
+            className="w-full bg-accent text-primary font-bold py-2 px-4 rounded-md hover:bg-primary hover:text-accent transition duration-300 flex items-center justify-center disabled:opacity-60"
           >
             <FaSignInAlt className="mr-2" />
-            Login
+            {loading ? "Signing in..." : "Login"}
           </button>
         </form>
-        <p className="mt-4 text-center text-sm text-gray-600">
+
+        <p className="mt-4 text-center text-xs text-gray-500">
+          Demo account: demo@healthnest.com / demo1234
+        </p>
+
+        <p className="mt-2 text-center text-sm text-gray-600">
           Don't have an account?{" "}
           <Link to="/signup" className="text-accent hover:underline">
             Sign up

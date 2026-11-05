@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 
 const Review = () => {
   const [rating, setRating] = useState(0);
@@ -20,12 +21,26 @@ const Review = () => {
   };
 
   // Function to handle form submit
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    alert(`Thank you for your review!!`);
-    setComment('');
-    setRating(0);
-    setVisible(false);
+
+    if (rating === 0) {
+      alert('Please select a star rating.');
+      return;
+    }
+
+    try {
+      await axios.post('/api/reviews', { rating, comment });
+      alert(`Thank you for your review!!`);
+      setComment('');
+      setRating(0);
+      setVisible(false);
+    } catch (error) {
+      alert(
+        error.response?.data?.message ||
+          'Sorry, your review could not be submitted.'
+      );
+    }
   };
 
   return (

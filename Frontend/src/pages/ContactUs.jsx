@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import axios from 'axios';
 import { FaEnvelope, FaPhone, FaMapMarkerAlt, FaPaperPlane } from 'react-icons/fa';
 
 const ContactUs = () => {
@@ -16,11 +17,19 @@ const ContactUs = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Handle form submission logic here, like sending data to an API
-    console.log(formData);
-    alert('Thank you for reaching out! We will get back to you soon.');
+
+    try {
+      await axios.post('/api/contact', formData);
+      alert('Thank you for reaching out! We will get back to you soon.');
+      setFormData({ name: '', email: '', message: '' });
+    } catch (error) {
+      alert(
+        error.response?.data?.message ||
+          'Sorry, your message could not be sent. Please try again.'
+      );
+    }
   };
 
   return (

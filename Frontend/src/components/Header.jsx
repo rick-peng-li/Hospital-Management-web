@@ -18,6 +18,7 @@ const Header = () => {
         { title: 'Appointments', path: '/appointments' },
         { title: 'Patients', path: '/patients' },
         { title: 'Doctors', path: '/doctors' },
+        { title: 'Admin', path: '/admin' },
         { title: 'About', path: '/about-us' },
         { title: 'Contact', path: '/contact-us' },
     ];
